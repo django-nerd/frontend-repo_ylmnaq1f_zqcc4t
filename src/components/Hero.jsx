@@ -60,7 +60,8 @@ export default function Hero() {
               {playing ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
               {playing ? 'Pause' : 'Play'}
             </button>
-            <audio ref={audioRef} src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" preload="none" />
+            {/* Prefer local path if present; fallback to example link */}
+            <audio ref={audioRef} src={getHeroAudioSrc()} preload="none" />
           </div>
         </div>
       </div>
@@ -69,4 +70,12 @@ export default function Hero() {
       `}</style>
     </section>
   );
+}
+
+function getHeroAudioSrc() {
+  // Use local file path as requested; can be served from public/audio
+  const local = '/audio/darood-ibrahimi.mp3';
+  // Fallback sample if local asset is not available in this environment
+  const fallback = 'https://example.com/audio/darood-ibrahimi.mp3';
+  return local || fallback;
 }

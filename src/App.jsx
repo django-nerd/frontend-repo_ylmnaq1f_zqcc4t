@@ -11,11 +11,13 @@ import IslamicCalendar from './components/IslamicCalendar';
 import Books from './components/Books';
 import Tools from './components/Tools';
 import Contact from './components/Contact';
+import DaroodLibrary from './components/DaroodLibrary';
+import DaroodDetail from './components/DaroodDetail';
 
 const routes = {
   '#/': () => <HomePage />,
-  '#/about': () => <EmptyPage title="About Us" />,
-  '#/durood-library': () => <EmptyPage title="Durood Library" />,
+  '#/about': () => <SimplePage title="About Us" />,
+  '#/durood-library': () => <DaroodLibrary />,
   '#/quran': () => <Quran />,
   '#/dua': () => <Dua />,
   '#/hadith': () => <Hadith />,
@@ -38,6 +40,11 @@ function useHashRoute() {
 
 function RouterView() {
   const hash = useHashRoute();
+  // Dynamic route for darood detail: #/darood/:slug
+  if (hash.startsWith('#/darood/')) {
+    const slug = decodeURIComponent(hash.replace('#/darood/', '').trim());
+    return <DaroodDetail slug={slug} />;
+  }
   const Page = routes[hash] || routes['#/'];
   return <Page />;
 }
@@ -51,13 +58,12 @@ function HomePage() {
   );
 }
 
-function EmptyPage({ title }) {
+function SimplePage({ title }) {
   return (
     <main className="bg-white">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
         <div className="rounded-2xl border border-emerald-100 bg-white p-10 shadow-sm">
           <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
-          <p className="mt-2 text-gray-600">This page is prepared and waiting for future content.</p>
         </div>
       </div>
     </main>
