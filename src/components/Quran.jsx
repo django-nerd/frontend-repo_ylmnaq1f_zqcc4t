@@ -1,123 +1,135 @@
 import React from 'react';
+import { Play, Pause, SkipBack, SkipForward } from 'lucide-react';
+import { useAudio } from './AudioProvider';
 
-const API_BASE = import.meta.env.VITE_BACKEND_URL || '';
+const API = 'https://api.alquran.cloud/v1';
 
 function useLocalStorage(key, initialValue) {
   const [state, setState] = React.useState(() => {
-    try {
-      const v = localStorage.getItem(key);
-      return v ? JSON.parse(v) : initialValue;
-    } catch {
-      return initialValue;
-    }
+    try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : initialValue; } catch { return initialValue; }
   });
-  React.useEffect(() => {
-    try { localStorage.setItem(key, JSON.stringify(state)); } catch {}
-  }, [key, state]);
+  React.useEffect(() => { try { localStorage.setItem(key, JSON.stringify(state)); } catch {} }, [key, state]);
   return [state, setState];
 }
 
 export default function Quran() {
+  const audio = useAudio();
   const [surahs, setSurahs] = React.useState([]);
   const [filtered, setFiltered] = React.useState([]);
   const [query, setQuery] = React.useState('');
   const [currentSurah, setCurrentSurah] = React.useState(null);
   const [arabicAyahs, setArabicAyahs] = React.useState([]);
+  const [audioAyahs, setAudioAyahs] = React.useState([]);
   const [translationAyahs, setTranslationAyahs] = React.useState([]);
   const [translation, setTranslation] = React.useState('none'); // none | en.asad | ur.jalandhry
-  const [audioAyahs, setAudioAyahs] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
-  const [playingAyah, setPlayingAyah] = React.useState(null);
-  const audioRef = React.useRef(null);
-  const [bookmarks, setBookmarks] = useLocalStorage('quran_bookmarks', {}); // {"2-255": true}
+  const [currentIdx, setCurrentIdx] = React.useState(-1);
+  const [autoAdvance, setAutoAdvance] = useLocalStorage('q_auto_advance', true);
 
   React.useEffect(() => {
-    const fetchSurahs = async () => {
+    const load = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/quran/surahs`);
+        const res = await fetch(`${API}/surah`);
         const data = await res.json();
-        if (Array.isArray(data)) {
-          setSurahs(data);
-          setFiltered(data);
-          setCurrentSurah(data[0]);
-        } else {
-          setError('Failed to load surah list');
-        }
-      } catch (e) {
+        const list = data?.data || [];
+        setSurahs(list);
+        setFiltered(list);
+        setCurrentSurah(list[0]);
+      } catch {
         setError('Failed to load surah list');
       }
     };
-    fetchSurahs();
+    load();
   }, []);
+
+  React.useEffect(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return setFiltered(surahs);
+    setFiltered(
+      surahs.filter((s) => s.englishName.toLowerCase().includes(q) || s.name.toLowerCase().includes(q) || String(s.number).includes(q))
+    );
+  }, [query, surahs]);
 
   React.useEffect(() => {
     if (!currentSurah) return;
     const load = async () => {
-      setLoading(true);
-      setError('');
+      setLoading(true); setError(''); setCurrentIdx(-1);
       try {
-        const [arRes, audioRes] = await Promise.all([
-          fetch(`${API_BASE}/api/quran/surah/${currentSurah.number}`),
-          fetch(`${API_BASE}/api/quran/surah/${currentSurah.number}/audio`),
+        const [arRes, audRes] = await Promise.all([
+          fetch(`${API}/surah/${currentSurah.number}`),
+          fetch(`${API}/surah/${currentSurah.number}/ar.alafasy`),
         ]);
         const ar = await arRes.json();
-        const aud = await audioRes.json();
-        if (ar?.ayahs) setArabicAyahs(ar.ayahs);
-        if (aud?.ayahs) setAudioAyahs(aud.ayahs);
+        const aud = await audRes.json();
+        setArabicAyahs(ar?.data?.ayahs || []);
+        setAudioAyahs(aud?.data?.ayahs || []);
         if (translation !== 'none') {
-          const tRes = await fetch(`${API_BASE}/api/quran/surah/${currentSurah.number}/translation/${translation}`);
+          const tRes = await fetch(`${API}/surah/${currentSurah.number}/${translation}`);
           const t = await tRes.json();
-          if (t?.ayahs) setTranslationAyahs(t.ayahs);
+          setTranslationAyahs(t?.data?.ayahs || []);
         } else {
           setTranslationAyahs([]);
         }
-      } catch (e) {
+      } catch {
         setError('Failed to load surah data');
       } finally {
         setLoading(false);
       }
     };
     load();
-    if (audioRef.current) {
-      audioRef.current.pause();
-      setPlayingAyah(null);
-    }
   }, [currentSurah, translation]);
 
+  // Handle auto-advance using global audio element
   React.useEffect(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return setFiltered(surahs);
-    setFiltered(
-      surahs.filter((s) =>
-        s.englishName.toLowerCase().includes(q) ||
-        s.name.toLowerCase().includes(q) ||
-        String(s.number).includes(q)
-      )
-    );
-  }, [query, surahs]);
+    const el = audio.audioEl();
+    const onEnded = () => {
+      if (!autoAdvance) return;
+      if (currentIdx < 0) return;
+      const next = currentIdx + 1;
+      if (next < audioAyahs.length) {
+        startFrom(next);
+      }
+    };
+    el.addEventListener('ended', onEnded);
+    return () => el.removeEventListener('ended', onEnded);
+  }, [autoAdvance, currentIdx, audioAyahs.length]);
 
-  const getAyahKey = (surahNo, ayah) => `${surahNo}-${ayah.numberInSurah}`;
-  const isBookmarked = (surahNo, ayah) => Boolean(bookmarks[getAyahKey(surahNo, ayah)]);
-  const toggleBookmark = (surahNo, ayah) => {
-    const key = getAyahKey(surahNo, ayah);
-    setBookmarks((b) => ({ ...b, [key]: !b[key] }));
+  const startFrom = async (idx) => {
+    const a = audioAyahs[idx];
+    if (!a || !a.audio) return;
+    try {
+      await audio.play(a.audio, `${currentSurah.englishName} • Ayah ${idx + 1}`);
+      setCurrentIdx(idx);
+      // Scroll into view
+      const el = document.getElementById(`ayah-${idx}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch {
+      // skip to next on failure
+      const next = idx + 1;
+      if (next < audioAyahs.length) startFrom(next);
+    }
   };
 
-  const playAyah = (ayahIdx) => {
-    const audioAyah = audioAyahs[ayahIdx];
-    if (!audioAyah || !audioAyah.audio) return;
-    if (!audioRef.current) audioRef.current = new Audio();
-    const el = audioRef.current;
-    if (playingAyah === ayahIdx && !el.paused) {
-      el.pause();
-      setPlayingAyah(null);
+  const toggleAyah = (idx) => {
+    const a = audioAyahs[idx];
+    if (!a || !a.audio) return;
+    const sameSrc = audio.src === new URL(a.audio, window.location.href).href;
+    if (sameSrc && audio.playing) {
+      audio.pause();
     } else {
-      el.src = audioAyah.audio;
-      el.play().catch(() => {});
-      setPlayingAyah(ayahIdx);
-      el.onended = () => setPlayingAyah(null);
+      startFrom(idx);
     }
+  };
+
+  const isCurrent = (idx) => currentIdx === idx && audio.playing;
+
+  const onPrev = () => {
+    if (currentIdx > 0) startFrom(currentIdx - 1);
+  };
+  const onNext = () => {
+    const next = (currentIdx < 0 ? 0 : currentIdx + 1);
+    if (next < audioAyahs.length) startFrom(next);
   };
 
   return (
@@ -161,14 +173,25 @@ export default function Quran() {
                   </h1>
                   <p className="text-sm text-gray-600">{currentSurah.englishNameTranslation} • {currentSurah.revelationType} • {currentSurah.numberOfAyahs} ayahs</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-sm text-gray-700">Translation</label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button onClick={onPrev} className="inline-flex items-center gap-2 rounded-full border border-emerald-200 px-3 py-1.5 text-sm text-emerald-700">
+                    <SkipBack className="h-4 w-4" /> Prev
+                  </button>
+                  <button onClick={() => (currentIdx >= 0 ? audio.toggle(audio.src, '') : startFrom(0))} className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm ${audio.playing ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700'}`}>
+                    {audio.playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />} {audio.playing ? 'Pause' : 'Play'}
+                  </button>
+                  <button onClick={onNext} className="inline-flex items-center gap-2 rounded-full border border-emerald-200 px-3 py-1.5 text-sm text-emerald-700">
+                    Next <SkipForward className="h-4 w-4" />
+                  </button>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input type="checkbox" checked={autoAdvance} onChange={(e) => setAutoAdvance(e.target.checked)} /> Auto-advance ayahs
+                  </label>
                   <select
                     value={translation}
                     onChange={(e) => setTranslation(e.target.value)}
                     className="rounded-md border border-emerald-200 px-2 py-1 text-sm"
                   >
-                    <option value="none">None</option>
+                    <option value="none">No translation</option>
                     <option value="en.asad">English (Asad)</option>
                     <option value="ur.jalandhry">Urdu (Jalandhri)</option>
                   </select>
@@ -179,9 +202,9 @@ export default function Quran() {
               {error && <div className="mt-4 text-red-600 text-sm">{error}</div>}
 
               {!loading && !error && (
-                <div className="mt-6 space-y-6">
+                <div className="mt-6 space-y-6 max-h-[70vh] overflow-auto pr-2">
                   {arabicAyahs.map((a, idx) => (
-                    <div key={a.number} className="rounded-lg border border-emerald-100 p-4">
+                    <div key={a.number} id={`ayah-${idx}`} className={`rounded-lg border p-4 ${isCurrent(idx) ? 'border-emerald-400 bg-emerald-50/50' : 'border-emerald-100'}`}>
                       <div dir="rtl" className="text-2xl leading-loose text-gray-900" style={{ fontFamily: 'Amiri, Scheherazade, serif' }}>
                         <span className="align-middle">{a.text}</span>
                         <span className="ml-2 text-emerald-700 text-base">﴿{a.numberInSurah}﴾</span>
@@ -191,20 +214,18 @@ export default function Quran() {
                       )}
                       <div className="mt-3 flex items-center gap-3">
                         <button
-                          onClick={() => playAyah(idx)}
+                          onClick={() => toggleAyah(idx)}
                           className={`rounded-full px-3 py-1.5 text-sm shadow-sm border ${
-                            playingAyah === idx ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-emerald-700 border-emerald-200'
+                            isCurrent(idx) ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-emerald-700 border-emerald-200'
                           }`}
                         >
-                          {playingAyah === idx ? 'Pause' : 'Play'}
+                          {isCurrent(idx) ? 'Pause' : 'Play'}
                         </button>
                         <button
-                          onClick={() => toggleBookmark(currentSurah.number, a)}
-                          className={`rounded-full px-3 py-1.5 text-sm shadow-sm border ${
-                            isBookmarked(currentSurah.number, a) ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-white text-gray-700 border-emerald-200'
-                          }`}
+                          onClick={() => startFrom(idx)}
+                          className="rounded-full px-3 py-1.5 text-sm shadow-sm border bg-white text-gray-700 border-emerald-200"
                         >
-                          {isBookmarked(currentSurah.number, a) ? 'Bookmarked' : 'Bookmark'}
+                          Play from here
                         </button>
                       </div>
                     </div>

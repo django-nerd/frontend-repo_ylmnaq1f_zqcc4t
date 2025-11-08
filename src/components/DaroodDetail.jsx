@@ -1,48 +1,12 @@
 import React from 'react';
 import { Play, Pause, ArrowLeft } from 'lucide-react';
 import { getDaroodBySlug } from './daroodsData';
+import { useAudio } from './AudioProvider';
 
 export default function DaroodDetail({ slug }) {
   const data = getDaroodBySlug(slug);
-  const audioRef = React.useRef(null);
-  const [playing, setPlaying] = React.useState(false);
-  const [progress, setProgress] = React.useState(0);
-  const [duration, setDuration] = React.useState(0);
-
-  React.useEffect(() => {
-    const el = audioRef.current;
-    if (!el) return;
-    const onEnded = () => setPlaying(false);
-    const onTime = () => setProgress(el.currentTime);
-    const onLoaded = () => setDuration(el.duration || 0);
-    el.addEventListener('ended', onEnded);
-    el.addEventListener('timeupdate', onTime);
-    el.addEventListener('loadedmetadata', onLoaded);
-    return () => {
-      el.removeEventListener('ended', onEnded);
-      el.removeEventListener('timeupdate', onTime);
-      el.removeEventListener('loadedmetadata', onLoaded);
-    };
-  }, []);
-
-  const togglePlay = () => {
-    const el = audioRef.current;
-    if (!el) return;
-    if (playing) {
-      el.pause();
-      setPlaying(false);
-    } else {
-      el.play().then(() => setPlaying(true)).catch(() => {});
-    }
-  };
-
-  const onSeek = (e) => {
-    const el = audioRef.current;
-    if (!el) return;
-    const val = Number(e.target.value);
-    el.currentTime = val;
-    setProgress(val);
-  };
+  const audio = useAudio();
+  const [localProgress, setLocalProgress] = React.useState(0);
 
   if (!data) {
     return (
@@ -57,6 +21,24 @@ export default function DaroodDetail({ slug }) {
   const goBack = () => {
     window.location.hash = '#/durood-library';
   };
+
+  const isPlaying = audio.playing && audio.src === new URL(data.audio, window.location.href).href;
+
+  const onToggle = () => {
+    if (isPlaying) audio.pause(); else audio.play(data.audio, data.title);
+  };
+
+  const onSeek = (e) => {
+    const val = Number(e.target.value);
+    setLocalProgress(val);
+    audio.seek(val);
+  };
+
+  React.useEffect(() => {
+    if (!isPlaying) return;
+    const id = setInterval(() => setLocalProgress(audio.time), 250);
+    return () => clearInterval(id);
+  }, [isPlaying, audio.time]);
 
   return (
     <section className="bg-white">
@@ -93,23 +75,22 @@ export default function DaroodDetail({ slug }) {
 
           <div className="mt-6">
             <div className="flex items-center gap-3">
-              <button onClick={togglePlay} className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-2 text-white hover:bg-emerald-700">
-                {playing ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-                {playing ? 'Pause' : 'Play'}
+              <button onClick={onToggle} className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-5 py-2 text-white hover:bg-emerald-700">
+                {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+                {isPlaying ? 'Pause' : 'Play'}
               </button>
               <span className="text-sm text-gray-600">
-                {formatTime(progress)} / {formatTime(duration)}
+                {formatTime(isPlaying ? audio.time : localProgress)} / {formatTime(audio.duration)}
               </span>
             </div>
             <input
               type="range"
               min={0}
-              max={Math.max(1, duration)}
-              value={progress}
+              max={Math.max(1, audio.duration || 0)}
+              value={isPlaying ? audio.time : localProgress}
               onChange={onSeek}
               className="mt-3 w-full"
             />
-            <audio ref={audioRef} src={data.audio} preload="none" />
           </div>
         </div>
       </div>

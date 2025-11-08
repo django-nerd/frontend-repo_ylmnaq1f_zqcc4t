@@ -1,6 +1,6 @@
 import React from 'react';
 import Header from './components/Header';
-import Hero from './components/Hero';
+import NewHero from './components/NewHero';
 import FeaturesGrid from './components/FeaturesGrid';
 import Footer from './components/Footer';
 import Quran from './components/Quran';
@@ -13,6 +13,7 @@ import Tools from './components/Tools';
 import Contact from './components/Contact';
 import DaroodLibrary from './components/DaroodLibrary';
 import DaroodDetail from './components/DaroodDetail';
+import { AudioProvider } from './components/AudioProvider';
 
 const routes = {
   '#/': () => <HomePage />,
@@ -40,11 +41,10 @@ function useHashRoute() {
 
 function RouterView() {
   const hash = useHashRoute();
-  // Dynamic route for darood detail: #/darood/:slug
   if (hash.startsWith('#/darood/')) {
     const slug = decodeURIComponent(hash.replace('#/darood/', '').trim());
     return <DaroodDetail slug={slug} />;
-  }
+    }
   const Page = routes[hash] || routes['#/'];
   return <Page />;
 }
@@ -52,7 +52,7 @@ function RouterView() {
 function HomePage() {
   return (
     <main>
-      <Hero />
+      <NewHero />
       <FeaturesGrid />
     </main>
   );
@@ -72,10 +72,12 @@ function SimplePage({ title }) {
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-white text-gray-900">
-      <Header />
-      <RouterView />
-      <Footer />
-    </div>
+    <AudioProvider>
+      <div className="min-h-screen bg-white text-gray-900">
+        <Header />
+        <RouterView />
+        <Footer />
+      </div>
+    </AudioProvider>
   );
 }
