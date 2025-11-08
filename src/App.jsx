@@ -3,19 +3,27 @@ import Header from './components/Header';
 import Hero from './components/Hero';
 import FeaturesGrid from './components/FeaturesGrid';
 import Footer from './components/Footer';
+import Quran from './components/Quran';
+import Dua from './components/Dua';
+import Hadith from './components/Hadith';
+import PrayerTimes from './components/PrayerTimes';
+import IslamicCalendar from './components/IslamicCalendar';
+import Books from './components/Books';
+import Tools from './components/Tools';
+import Contact from './components/Contact';
 
 const routes = {
   '#/': () => <HomePage />,
   '#/about': () => <EmptyPage title="About Us" />,
   '#/durood-library': () => <EmptyPage title="Durood Library" />,
-  '#/quran': () => <EmptyPage title="Quran" />,
-  '#/dua': () => <EmptyPage title="Dua" />,
-  '#/hadith': () => <EmptyPage title="Hadith" />,
-  '#/prayer-times': () => <EmptyPage title="Prayer Times" />,
-  '#/islamic-calendar': () => <EmptyPage title="Islamic Calendar" />,
-  '#/islamic-books': () => <EmptyPage title="Islamic Books" />,
-  '#/tools': () => <EmptyPage title="Tools" />,
-  '#/contact': () => <EmptyPage title="Contact" />,
+  '#/quran': () => <Quran />,
+  '#/dua': () => <Dua />,
+  '#/hadith': () => <Hadith />,
+  '#/prayer-times': () => <PrayerTimes />,
+  '#/islamic-calendar': () => <IslamicCalendar />,
+  '#/islamic-books': () => <Books />,
+  '#/tools': () => <Tools />,
+  '#/contact': () => <Contact />,
 };
 
 function useHashRoute() {
